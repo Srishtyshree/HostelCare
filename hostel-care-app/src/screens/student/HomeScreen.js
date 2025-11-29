@@ -1,14 +1,111 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Animated } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import colors from '../../utils/colors';
-import { getData, STORAGE_KEYS, getComplaintStats } from '../../utils/helpers';
+import { getData, STORAGE_KEYS } from '../../utils/helpers';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
+const StatCard = ({ number, label, gradientColors, icon, delay = 0 }) => {
+  const [scaleAnim] = useState(new Animated.Value(0));
+
+  React.useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      tension: 50,
+      friction: 7,
+      delay,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={[styles.statCard, { transform: [{ scale: scaleAnim }] }]}>
+      <LinearGradient
+        colors={gradientColors}
+        style={styles.statCardGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <Text style={styles.statIcon}>{icon}</Text>
+        <Text style={styles.statNumber}>{number}</Text>
+        <Text style={styles.statLabel}>{label}</Text>
+      </LinearGradient>
+    </Animated.View>
+  );
+};
+
+const ActionCard = ({ title, description, icon, onPress, delay = 0 }) => {
+  const [scaleAnim] = useState(new Animated.Value(1));
+  const [slideAnim] = useState(new Animated.Value(50));
+  const [opacityAnim] = useState(new Animated.Value(0));
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 400,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <AnimatedTouchable
+      style={[
+        styles.actionCard,
+        {
+          transform: [{ scale: scaleAnim }, { translateX: slideAnim }],
+          opacity: opacityAnim,
+        },
+      ]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+    >
+      <View style={styles.actionCardIconContainer}>
+        <Text style={styles.actionCardIcon}>{icon}</Text>
+      </View>
+      <View style={styles.actionCardContent}>
+        <Text style={styles.actionCardTitle}>{title}</Text>
+        <Text style={styles.actionCardDescription}>{description}</Text>
+      </View>
+      <View style={styles.actionCardArrowContainer}>
+        <Text style={styles.actionCardArrow}>→</Text>
+      </View>
+    </AnimatedTouchable>
+  );
+};
 
 const StudentHomeScreen = ({ navigation }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [stats, setStats] = useState({ total: 0, submitted: 0, inProgress: 0, resolved: 0 });
   const [refreshing, setRefreshing] = useState(false);
+  const [headerAnim] = useState(new Animated.Value(0));
 
   const loadData = async () => {
     const user = await getData('@currentUser');
@@ -32,6 +129,11 @@ const StudentHomeScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      Animated.timing(headerAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }).start();
     }, [])
   );
 
@@ -41,84 +143,114 @@ const StudentHomeScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
+  const handleCreateComplaint = () => {
+    navigation.navigate('AddComplaint');
+  };
+
   return (
     <ScreenWrapper>
       <ScrollView 
         style={styles.container}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Welcome, {currentUser?.name || 'Student'}</Text>
-            <Text style={styles.subGreeting}>Manage your hostel complaints</Text>
-          </View>
-        </View>
+        <LinearGradient
+          colors={[colors.primary, colors.primary + 'DD']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <Animated.View
+            style={{
+              opacity: headerAnim,
+              transform: [{
+                translateY: headerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              }],
+            }}
+          >
+            <Text style={styles.greeting}>👋 Hello, {currentUser?.name || 'Student'}</Text>
+            <Text style={styles.subGreeting}>How can we help you today?</Text>
+          </Animated.View>
+        </LinearGradient>
 
         <View style={styles.statsContainer}>
-          <View style={[styles.statCard, styles.statCardBlue]}>
-            <Text style={styles.statNumber}>{stats.submitted}</Text>
-            <Text style={styles.statLabel}>Submitted</Text>
-          </View>
-          
-          <View style={[styles.statCard, styles.statCardOrange]}>
-            <Text style={styles.statNumber}>{stats.inProgress}</Text>
-            <Text style={styles.statLabel}>In Progress</Text>
-          </View>
-          
-          <View style={[styles.statCard, styles.statCardGreen]}>
-            <Text style={styles.statNumber}>{stats.resolved}</Text>
-            <Text style={styles.statLabel}>Resolved</Text>
-          </View>
+          <StatCard
+            number={stats.submitted}
+            label="Submitted"
+            gradientColors={['#3B82F6', '#2563EB']}
+            icon="📤"
+            delay={100}
+          />
+          <StatCard
+            number={stats.inProgress}
+            label="In Progress"
+            gradientColors={['#F59E0B', '#D97706']}
+            icon="⏳"
+            delay={200}
+          />
+          <StatCard
+            number={stats.resolved}
+            label="Resolved"
+            gradientColors={['#10B981', '#059669']}
+            icon="✅"
+            delay={300}
+          />
         </View>
 
         <TouchableOpacity
           style={styles.createButton}
-          onPress={() => navigation.navigate('AddComplaint')}
-          activeOpacity={0.8}
+          onPress={handleCreateComplaint}
+          activeOpacity={0.9}
         >
-          <View style={styles.createButtonContent}>
-            <Text style={styles.createButtonIcon}>➕</Text>
-            <Text style={styles.createButtonText}>Create New Complaint</Text>
-          </View>
+          <LinearGradient
+            colors={[colors.primary, colors.primary + 'DD']}
+            style={styles.createButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <View style={styles.createButtonIconCircle}>
+              <Text style={styles.createButtonIcon}>✨</Text>
+            </View>
+            <View style={styles.createButtonTextContainer}>
+              <Text style={styles.createButtonText}>Create New Complaint</Text>
+              <Text style={styles.createButtonSubtext}>Report an issue quickly</Text>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
 
-        <View style={styles.actionsContainer}>
-          <Text style={styles.sectionTitle}>📋 My Complaints</Text>
-          
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('MyComplaintsNav')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.actionCardContent}>
-              <Text style={styles.actionCardTitle}>View My Complaints</Text>
-              <Text style={styles.actionCardDescription}>
-                Track status and updates on your submitted complaints
-              </Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <View style={styles.sectionIconCircle}>
+                <Text style={styles.sectionIcon}>📋</Text>
+              </View>
+              <Text style={styles.sectionTitle}>Quick Actions</Text>
             </View>
-            <Text style={styles.actionCardArrow}>→</Text>
-          </TouchableOpacity>
+          </View>
+
+          <ActionCard
+            title="My Complaints"
+            description="Track status and updates on your submissions"
+            icon="📝"
+            onPress={() => navigation.navigate('MyComplaintsNav')}
+            delay={400}
+          />
+
+          <ActionCard
+            title="Browse All Complaints"
+            description="View and upvote complaints from other students"
+            icon="🔍"
+            onPress={() => navigation.navigate('BrowseComplaintsNav')}
+            delay={500}
+          />
         </View>
 
-        <View style={styles.actionsContainer}>
-          <Text style={styles.sectionTitle}>🔍 Browse All Complaints</Text>
-          
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('BrowseComplaintsNav')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.actionCardContent}>
-              <Text style={styles.actionCardTitle}>Browse All Complaints</Text>
-              <Text style={styles.actionCardDescription}>
-                View and upvote complaints from other students
-              </Text>
-            </View>
-            <Text style={styles.actionCardArrow}>→</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </ScreenWrapper>
   );
@@ -127,117 +259,169 @@ const StudentHomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
   },
   header: {
-    padding: 20,
-    paddingTop: 40,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 32,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   greeting: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: 4,
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.white,
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
   subGreeting: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 15,
+    color: colors.white + 'DD',
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 24,
     gap: 12,
+    marginTop: -20,
   },
   statCard: {
     flex: 1,
-    padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: colors.shadow,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  statCardBlue: {
-    backgroundColor: colors.statusOpen + '20',
+  statCardGradient: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statCardOrange: {
-    backgroundColor: colors.statusProgress + '20',
-  },
-  statCardGreen: {
-    backgroundColor: colors.statusResolved + '20',
+  statIcon: {
+    fontSize: 28,
+    marginBottom: 8,
   },
   statNumber: {
     fontSize: 32,
-    fontWeight: '700',
-    color: colors.textPrimary,
+    fontWeight: '800',
+    color: colors.white,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: colors.white + 'EE',
     textAlign: 'center',
+    fontWeight: '600',
   },
   createButton: {
     margin: 20,
-    marginTop: 10,
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 20,
+    marginTop: 24,
+    borderRadius: 20,
+    overflow: 'hidden',
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  createButtonContent: {
+  createButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 20,
+    paddingVertical: 24,
+  },
+  createButtonIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 16,
   },
   createButtonIcon: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: 28,
+  },
+  createButtonTextContainer: {
+    flex: 1,
   },
   createButtonText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.white,
+    marginBottom: 4,
   },
-  actionsContainer: {
-    padding: 20,
-    paddingTop: 10,
+  createButtonSubtext: {
+    fontSize: 13,
+    color: colors.white + 'CC',
+    fontWeight: '500',
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sectionIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  sectionIcon: {
+    fontSize: 18,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 12,
   },
   actionCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: colors.shadow,
+    marginBottom: 12,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border + '40',
+  },
+  actionCardIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  actionCardIcon: {
+    fontSize: 24,
   },
   actionCardContent: {
     flex: 1,
   },
   actionCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: 4,
   },
@@ -245,12 +429,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 18,
+    fontWeight: '500',
   },
-  actionCardArrow: {
-    fontSize: 24,
-    color: colors.textLight,
+  actionCardArrowContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 12,
   },
+  actionCardArrow: {
+    fontSize: 20,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  bottomPadding: {
+    height: 24,
+  },
 });
-
-export default StudentHomeScreen;
